@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { supabase } from "@/services/supabase";
+import { mockDb } from "@/services/mock-data";
 import { Quest, QuestDifficulty } from "@/types";
 import { QUEST_XP_REWARDS } from "@/constants";
 
@@ -25,77 +25,52 @@ export const useQuestStore = create<QuestState>((set, get) => ({
   quests: [],
   loading: false,
 
-  fetchQuests: async (userId: string) => {
+  fetchQuests: async (_userId: string) => {
     set({ loading: true });
-    try {
-      const { data, error } = await supabase
-        .from("quests")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      set({ quests: data || [] });
-    } finally {
-      set({ loading: false });
-    }
+    await new Promise((r) => setTimeout(r, 200));
+    set({ quests: [...mockDb.quests], loading: false });
   },
 
   createQuest: async (userId, quest) => {
     const xpReward = QUEST_XP_REWARDS[quest.difficulty] || 10;
-    const { data, error } = await supabase
-      .from("quests")
-      .insert({
-        user_id: userId,
-        title: quest.title,
-        description: quest.description || null,
-        difficulty: quest.difficulty,
-        xp_reward: xpReward,
-        due_date: quest.due_date || null,
-      })
-      .select()
-      .single();
+    const now = new Date().toISOString();
+    const newQuest: Quest = {
+      id: mockDb.uuid(),
+      user_id: userId,
+      title: quest.title,
+      description: quest.description || null,
+      difficulty: quest.difficulty,
+      xp_reward: xpReward,
+      status: "active",
+      due_date: quest.due_date || null,
+      created_at: now,
+      updated_at: now,
+    };
 
-    if (error) throw error;
-    set({ quests: [data, ...get().quests] });
+    mockDb.quests.unshift(newQuest);
+    set({ quests: [...mockDb.quests] });
   },
 
-  completeQuest: async (questId: string, userId: string) => {
+  completeQuest: async (questId: string, _userId: string) => {
     const quest = get().quests.find((q) => q.id === questId);
     if (!quest) return 0;
 
-    // Update quest status
-    const { error: updateError } = await supabase
-      .from("quests")
-      .update({ status: "completed", updated_at: new Date().toISOString() })
-      .eq("id", questId);
-    if (updateError) throw updateError;
+    // Update in mock db
+    const idx = mockDb.quests.findIndex((q) => q.id === questId);
+    if (idx !== -1) {
+      mockDb.quests[idx] = {
+        ...mockDb.quests[idx],
+        status: "completed",
+        updated_at: new Date().toISOString(),
+      };
+    }
 
-    // Record completion
-    const { error: completionError } = await supabase
-      .from("quest_completions")
-      .insert({
-        quest_id: questId,
-        user_id: userId,
-        xp_earned: quest.xp_reward,
-      });
-    if (completionError) throw completionError;
-
-    // Update local state
-    set({
-      quests: get().quests.map((q) =>
-        q.id === questId ? { ...q, status: "completed" as const } : q
-      ),
-    });
-
+    set({ quests: [...mockDb.quests] });
     return quest.xp_reward;
   },
 
   deleteQuest: async (questId: string) => {
-    const { error } = await supabase
-      .from("quests")
-      .delete()
-      .eq("id", questId);
-    if (error) throw error;
-    set({ quests: get().quests.filter((q) => q.id !== questId) });
+    mockDb.quests = mockDb.quests.filter((q) => q.id !== questId);
+    set({ quests: [...mockDb.quests] });
   },
 }));

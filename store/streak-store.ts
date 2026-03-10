@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { supabase } from "@/services/supabase";
+import { mockDb } from "@/services/mock-data";
 import { Streak } from "@/types";
 import { STREAK_MILESTONES } from "@/constants";
 
@@ -15,22 +15,13 @@ export const useStreakStore = create<StreakState>((set, get) => ({
   streak: null,
   loading: false,
 
-  fetchStreak: async (userId: string) => {
+  fetchStreak: async (_userId: string) => {
     set({ loading: true });
-    try {
-      const { data, error } = await supabase
-        .from("streaks")
-        .select("*")
-        .eq("user_id", userId)
-        .single();
-      if (error) throw error;
-      set({ streak: data });
-    } finally {
-      set({ loading: false });
-    }
+    await new Promise((r) => setTimeout(r, 200));
+    set({ streak: { ...mockDb.streak }, loading: false });
   },
 
-  recordActivity: async (userId: string) => {
+  recordActivity: async (_userId: string) => {
     const currentStreak = get().streak;
     if (!currentStreak) return 0;
 
@@ -53,20 +44,16 @@ export const useStreakStore = create<StreakState>((set, get) => ({
       currentStreak.longest_streak
     );
 
-    const { data, error } = await supabase
-      .from("streaks")
-      .update({
-        current_streak: newCurrentStreak,
-        longest_streak: newLongestStreak,
-        last_activity_date: today,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("user_id", userId)
-      .select()
-      .single();
+    const updated: Streak = {
+      ...currentStreak,
+      current_streak: newCurrentStreak,
+      longest_streak: newLongestStreak,
+      last_activity_date: today,
+      updated_at: new Date().toISOString(),
+    };
 
-    if (error) throw error;
-    set({ streak: data });
+    mockDb.streak = { ...updated };
+    set({ streak: updated });
 
     // Check for streak milestone bonuses
     let bonusXp = 0;

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { supabase } from "@/services/supabase";
+import { mockDb } from "@/services/mock-data";
 import { PomodoroSession, PomodoroSessionType } from "@/types";
 import { POMODORO_DEFAULTS } from "@/constants";
 
@@ -101,15 +101,18 @@ export const usePomodoroStore = create<PomodoroState>((set, get) => ({
       long_break: longBreakDuration,
     };
 
-    // Save session to database
-    await supabase.from("pomodoro_sessions").insert({
+    // Save session to mock db
+    const newSession: PomodoroSession = {
+      id: mockDb.uuid(),
       user_id: userId,
       session_type: sessionType,
       duration_minutes: durationMap[sessionType],
       xp_earned: xpEarned,
       completed: true,
+      started_at: new Date(Date.now() - durationMap[sessionType] * 60000).toISOString(),
       completed_at: new Date().toISOString(),
-    });
+    };
+    mockDb.pomodoroSessions.unshift(newSession);
 
     const newSessionsCompleted = isFocus
       ? sessionsCompleted + 1
@@ -133,25 +136,16 @@ export const usePomodoroStore = create<PomodoroState>((set, get) => ({
       sessionType: nextType,
       timeRemaining: nextDuration * 60,
       sessionsCompleted: newSessionsCompleted,
+      sessions: [...mockDb.pomodoroSessions],
     });
 
     return xpEarned;
   },
 
-  fetchSessions: async (userId: string) => {
+  fetchSessions: async (_userId: string) => {
     set({ loading: true });
-    try {
-      const { data, error } = await supabase
-        .from("pomodoro_sessions")
-        .select("*")
-        .eq("user_id", userId)
-        .order("completed_at", { ascending: false })
-        .limit(50);
-      if (error) throw error;
-      set({ sessions: data || [] });
-    } finally {
-      set({ loading: false });
-    }
+    await new Promise((r) => setTimeout(r, 200));
+    set({ sessions: [...mockDb.pomodoroSessions], loading: false });
   },
 
   updateSettings: (settings) => {

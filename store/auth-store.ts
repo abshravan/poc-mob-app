@@ -1,10 +1,15 @@
 import { create } from "zustand";
-import { supabase } from "@/services/supabase";
-import { Session, User } from "@supabase/supabase-js";
+import { mockDb } from "@/services/mock-data";
+
+type MockUser = {
+  id: string;
+  email: string;
+  user_metadata: { username: string };
+};
 
 type AuthState = {
-  session: Session | null;
-  user: User | null;
+  session: { user: MockUser } | null;
+  user: MockUser | null;
   loading: boolean;
   initialized: boolean;
 
@@ -14,6 +19,12 @@ type AuthState = {
   signOut: () => Promise<void>;
 };
 
+const mockUser: MockUser = {
+  id: mockDb.userId,
+  email: mockDb.email,
+  user_metadata: { username: mockDb.username },
+};
+
 export const useAuthStore = create<AuthState>((set) => ({
   session: null,
   user: null,
@@ -21,76 +32,42 @@ export const useAuthStore = create<AuthState>((set) => ({
   initialized: false,
 
   initialize: async () => {
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      set({
-        session,
-        user: session?.user ?? null,
-        initialized: true,
-      });
-
-      supabase.auth.onAuthStateChange((_event, session) => {
-        set({ session, user: session?.user ?? null });
-      });
-    } catch {
-      set({ initialized: true });
-    }
+    // Auto-login with mock user for testing
+    set({
+      session: { user: mockUser },
+      user: mockUser,
+      initialized: true,
+    });
   },
 
-  signUp: async (email: string, password: string, username: string) => {
+  signUp: async (_email: string, _password: string, username: string) => {
     set({ loading: true });
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { username },
-        },
-      });
-      if (error) throw error;
-
-      if (data.user) {
-        // Create profile, stats, and streak records
-        await Promise.all([
-          supabase.from("users").insert({
-            id: data.user.id,
-            email,
-            username,
-          }),
-          supabase.from("stats").insert({
-            user_id: data.user.id,
-          }),
-          supabase.from("streaks").insert({
-            user_id: data.user.id,
-          }),
-        ]);
-      }
-
-      set({ session: data.session, user: data.user });
-    } finally {
-      set({ loading: false });
-    }
+    // Simulate network delay
+    await new Promise((r) => setTimeout(r, 500));
+    const user: MockUser = {
+      id: mockDb.userId,
+      email: _email,
+      user_metadata: { username },
+    };
+    set({
+      session: { user },
+      user,
+      loading: false,
+    });
   },
 
-  signIn: async (email: string, password: string) => {
+  signIn: async (_email: string, _password: string) => {
     set({ loading: true });
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (error) throw error;
-      set({ session: data.session, user: data.user });
-    } finally {
-      set({ loading: false });
-    }
+    // Simulate network delay
+    await new Promise((r) => setTimeout(r, 500));
+    set({
+      session: { user: mockUser },
+      user: mockUser,
+      loading: false,
+    });
   },
 
   signOut: async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
     set({ session: null, user: null });
   },
 }));
